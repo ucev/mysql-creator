@@ -1,0 +1,21 @@
+host: localhost
+user: root
+pass: root
+dbname: jsyaml
+tables:
+  - tb1:
+      - id:
+          type: int
+          key: 'primary key'
+          auto_increment: true
+          null: false
+      - name:
+          type: char(20)
+          key: 'unique'
+          null: false
+          default: ab
+  - tb2:
+      - id:
+          type: int
+      - name2:
+          type: char(20)
