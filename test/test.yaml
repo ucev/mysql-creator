@@ -1,0 +1,54 @@
+tb1:
+  - id: 1
+    name: A
+    age: 1
+    sex: M
+    home: m
+    score: 1
+  - id: 2
+    name: B
+    age: 2
+    sex: M
+    home: m
+    score: 2
+  - id: 3
+    name: C
+    age: 2
+    sex: W
+    home: w
+    score: 3
+  - id: 4
+    name: D
+    age: 4
+    sex: W
+    home: w
+    score: 4
+tb2:
+  - id: 1
+    name2: a
+    count: 1
+  - id: 2
+    name2: b
+    count: 2
+  - id: 3
+    name2: c
+    count: 3
+  - id: 4
+    name2: d
+    count: 4
+  - id: 5
+    name2: e
+    count: 5
+tb3:
+  - id: 1
+    book: AA
+  - id: 2
+    book: BB
+  - id: 3
+    book: CC
+  - id: 4
+    book: DD
+  - id: 5
+    book: EE
+  - id: 6
+    book: FF

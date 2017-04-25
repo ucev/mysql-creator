@@ -14,8 +14,28 @@ tables:
           key: 'unique'
           null: false
           default: ab
+      - age:
+          type: int
+          default: 0
+      - sex:
+          type: char(1)
+          default: 'M'
+      - home:
+          type: char(50)
+      - score:
+          type: int
+          default: 0
   - tb2:
       - id:
           type: int
       - name2:
           type: char(20)
+      - count:
+          type: int
+  - tb3:
+      - id: 
+          type: int
+          key: 'primary key'
+          auto_increment: true
+      - book:
+          type: char(30)

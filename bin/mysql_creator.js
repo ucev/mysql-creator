@@ -1,28 +1,23 @@
 #!/usr/bin/env node
-const mysql_creator = require('../src/mysql_creator');
+const createDatabase = require('../src/mysql_creator').createDatabase;
+const exportStruct = require('../src/mysql_creator').exportStruct;
 const importData = require('../src/mysql_data').importData;
 const exportData = require('../src/mysql_data').exportData;
 const logger = require('../src/utils/logger');
 const readline = require('readline');
 
 const options = [
+  "d",
+  "e",
+  "h",
   "i",
   "o",
-  "h",
-  "u",
-  "d",
-  "p"
+  "p",
+  "u"
 ];
 
-var argv = process.argv;
-if (argv.length <= 2) {
-  logger.error('请输入数据库配置文件名');
-  process.exit(1);
-} else if (argv.length == 2) {
-  mysql_creator(argv[2]);
-} else {
+function destructOptions(args) {
   var params = {};
-  var args = Array.from(argv).slice(2);
   var arg;
   for (var i = 0; i < args.length; i++) {
     arg = args[i];
@@ -45,12 +40,23 @@ if (argv.length <= 2) {
       }
     }
   }
-  let { h: host, u: user, p: password, d: database, i: input, o: output } = params;
-  if (!(host && user && database && (input || output))) {
+  return params;
+}
+
+var argv = process.argv;
+if (argv.length <= 2) {
+  logger.error('请输入数据库配置文件名');
+  process.exit(1);
+} else if (argv.length == 3) {
+  createDatabase(argv[2]);
+} else {
+  var args = Array.from(argv).slice(2);
+  var params = destructOptions(args);
+  let { h: host, u: user, p: password, d: database, i: input, o: output, e: exportf} = params;
+  if (!(host && user && database && (input || output || exportf))) {
     logger.error("参数错误");
     process.exit(1);
   }
-  console.log(`host: ${host} user: ${user} password: ${password} database: ${database} input: ${input} output: ${output}`);
   if (!password) {
     var rl = readline.createInterface({
       input: process.stdin,
@@ -61,15 +67,19 @@ if (argv.length <= 2) {
       rl.close();
       if (input) {
         importData(input, host, user, password, database);
-      } else {
+      } else if (output) {
         exportData(output, host, user, password, database);
+      } else if (exportf) {
+        exportStruct(exportf, host, user, password, database);
       }
     })
   } else {
     if (input) {
       importData(input, host, user, password, database);
-    } else {
+    } else if (output) {
       exportData(output, host, user, password, database);
+    } else if (exportf) {
+      exportStruct(exportf, host, user, password, database);
     }
   }
 }
