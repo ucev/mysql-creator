@@ -1,6 +1,6 @@
 {
   "name": "mysql-creator",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "mysql-creator",
   "main": "index.js",
   "scripts": {
