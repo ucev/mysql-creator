@@ -25,9 +25,12 @@ function destructOptions(args) {
       // be consistent with mysql command line tool
       if (arg[1] == "p") {
         if (arg.length == 2) {
-          params[arg[1]] = args[i + 1];
-          i++;
+          if (i + 1 < args.length && !options.includes(args[i + 1][1])) {
+            params[arg[1]] = args[i + 1];
+            i++;
+          }
         } else {
+          console.log(args[i + 1][1]);
           params[arg[1]] = arg.substr(2);
         }
       } else {
@@ -40,6 +43,7 @@ function destructOptions(args) {
       }
     }
   }
+  console.log(params);
   return params;
 }
 
@@ -52,7 +56,7 @@ if (argv.length <= 2) {
 } else {
   var args = Array.from(argv).slice(2);
   var params = destructOptions(args);
-  let { h: host, u: user, p: password, d: database, i: input, o: output, e: exportf} = params;
+  let { h: host, u: user, p: password, d: database, i: input, o: output, e: exportf } = params;
   if (!(host && user && database && (input || output || exportf))) {
     logger.error("参数错误");
     process.exit(1);

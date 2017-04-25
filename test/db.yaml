@@ -39,3 +39,6 @@ tables:
           auto_increment: true
       - book:
           type: char(30)
+      - bookname:
+          type: char(30)
+          default: 老子
