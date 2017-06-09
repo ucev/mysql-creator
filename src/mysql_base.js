@@ -11,6 +11,10 @@ function beginTransaction(conn) {
   })
 }
 
+function close(conn) {
+  conn.end(() => { });
+}
+
 function commit(conn) {
   return new Promise((resolve, reject) => {
     conn.commit((err) => {
@@ -38,9 +42,22 @@ function createConnection(configs) {
   return conn;
 }
 
-function createDatabase(conn, dbname) {
+function createDatabase(conn, dbname, charset, collate) {
+  if (charset && collate) {
+    var c = collate.split('_');
+    if (c[0] != charset) collate = undefined;
+  }
+  var sql = `create database if not exists ${conn.escapeId(dbname)}`;
+  if (charset) {
+    sql += ` character set ${charset}`;
+    if (collate) {
+      sql += ` collate ${collate}`;
+    }
+  } else {
+    sql += ` character set utf8mb4 collate utf8mb4_unicode_ci`;
+  }
   return new Promise((resolve, reject) => {
-    conn.query('create database if not exists ' + conn.escapeId(dbname) + ' character set utf8mb4 collate utf8mb4_unicode_ci', (err, results, fields) => {
+    conn.query(sql, (err, results, fields) => {
       if (err) {
         reject();
       }
@@ -66,33 +83,74 @@ function getDatabaseData(conn) {
   })
 }
 
-function getDatabaseStruct(conn) {
-  var structs = {};
-  return listTables(conn).then((tables) => {
-    var tpromises = tables.map((tname) => {
-      return getTableStruct(conn, tname, structs).then((struct) => {
-        structs[tname] = struct;
-      }).catch(() => {
-
-      })
+function getDatabaseCharset(conn, dbname) {
+  return new Promise((resolve, reject) => {
+    conn.query(`show create database ${conn.escapeId(dbname)}`, (err, results, fields) => {
+      if (err) {
+        reject();
+      }
+      var createDb = results[0]['Create Database'];
+      var reg = /CHARACTER SET\s(\w+)\sCOLLATE\s(\w+)/;
+      var res = reg.exec(createDb);
+      if (res) {
+        resolve({ charset: res[1], collate: res[2] });
+      }
+      reg = /CHARACTER SET\s+(\w+)/;
+      res = reg.exec(createDb);
+      if (res) {
+        resolve({ charset: res[1] });
+      }
+      resolve({});
     })
-    return Promise.all(tpromises).then(() => {
-      return Promise.resolve(structs);
-    })
-  }).catch(() => {
   })
 }
 
+function getDatabaseStruct(conn, dbname) {
+  var tables = []
+  return listTables(conn).then((tbs) => {
+    var tpromises = tbs.map((tname) => {
+      return getTableStruct(conn, tname, tables).then((struct) => {
+        tables.push({ [tname]: struct })
+      }).catch(() => {
+        console.log('error');
+      })
+    })
+    return Promise.all(tpromises).then(() => {
+      return Promise.resolve(tables);
+    })
+  }).then((structs) => {
+    return getDatabaseCharset(conn, dbname)
+  }).then((data) => {
+    return Promise.resolve(Object.assign({ tables: tables }, data));
+  }).catch(() => { })
+}
+
+function getForeignKeys(createTb) {
+  var reg = /FOREIGN KEY \(([`\w]+?)\) REFERENCES ([`\w]+?) \(([`\w]+)\) ON DELETE ([`\w]+\s*?[`\w]*?) ON UPDATE ([`\w]+\s*?[`\w]*?)/mg;
+  var matches = createTb.match(reg);
+  if (!matches) return [];
+  var res = matches.map((mat) => {
+    var r = reg.exec(mat);
+    return {
+      col: r[1],
+      ftable: r[2],
+      fcol: r[3],
+      delete: r[4],
+      update: r[5]
+    }
+  })
+  return res;
+}
+
 function _getTableStruct(data) {
-  var st = {};
+  var st = { rows: [], keys: {} };
   data.forEach((r) => {
+    if (!r) return;
     var id = r.Field;
     var descp = {};
-    descp = {
-      type: r.Type,
-      null: r.Null != 'NO',
-      default: r.Default
-    }
+    descp.type = r.Type;
+    if (r.Null.toLowerCase() == 'no') descp['null'] = false;
+    if (r.Default) descp.default = r.Default;
     if (r.Key) {
       var key = "";
       switch (r.Key) {
@@ -100,21 +158,35 @@ function _getTableStruct(data) {
           key = "unique";
           break;
         case "PRI":
-          key = "primary key";
+          key = "primary";
           break;
         default:
-          key = "";
           break;
       }
-      descp.key = key;
+      if (key)
+        st.keys[key] ? (st.keys[key].push(id)) : (st.keys[key] = [id]);
     }
     var extra = r.Extra.toLowerCase();
     if (extra.includes("auto_increment")) {
       descp.auto_increment = true;
     }
-    st[id] = descp;
+    st.rows.push({ [id]: descp });
   })
   return st;
+}
+
+function getTableCharset(createTb) {
+  var reg = /CHARSET=(\w+)\s+COLLATE=(\w+)\s*$/m;
+  var res = reg.exec(createTb);
+  if (res) {
+    return { charset: res[1], collate: res[2] };
+  }
+  reg = /CHARSET=(\w+)\s*$/m;
+  res = reg.exec(createTb);
+  if (res) {
+    return { charset: res[1] };
+  }
+  return {};
 }
 
 function getTableData(conn, tablename) {
@@ -138,7 +210,24 @@ function getTableStruct(conn, tablename) {
       var struct = _getTableStruct(results);
       resolve(struct);
     })
-  })
+  }).then((struct) => {
+    return new Promise((resolve, reject) => {
+      conn.query(`show create table ${tablename}`, (err, results, fields) => {
+        if (err) {
+          console.log(err);
+          reject();
+        }
+        var createTb = results[0]['Create Table'];
+        var chars = getTableCharset(createTb);
+        Object.assign(struct, chars);
+        var fkeys = getForeignKeys(createTb);
+        if (fkeys) {
+          struct.keys.foreign = fkeys;
+        }
+        resolve(struct);
+      })
+    })
+  }).catch(() => { });
 }
 
 function listTables(conn) {
@@ -146,6 +235,9 @@ function listTables(conn) {
     conn.query('show tables', (err, results, fields) => {
       if (err) {
         reject();
+      }
+      if (results.length == 0) {
+        resolve([]);
       }
       var fname = fields[0].name;
       var tables = results.map(r => r[fname]);
@@ -174,6 +266,7 @@ function truncate(conn, table) {
 }
 
 exports.beginTransaction = beginTransaction;
+exports.close = close;
 exports.commit = commit;
 exports.connectDatabase = connectDatabase;
 exports.createConnection = createConnection;

@@ -2,43 +2,59 @@ host: localhost
 user: root
 pass: root
 dbname: jsyaml
+charset: utf8
+collate: utf8mb4_unicode_ci
 tables:
   - tb1:
-      - id:
-          type: int
-          key: 'primary key'
-          auto_increment: true
-          null: false
-      - name:
-          type: char(20)
-          key: 'unique'
-          null: false
-          default: ab
-      - age:
-          type: int
-          default: 0
-      - sex:
-          type: char(1)
-          default: 'M'
-      - home:
-          type: char(50)
-      - score:
-          type: int
-          default: 0
+      rows:
+        - id:
+            type: int
+            auto_increment: true
+            null: false
+        - name:
+            type: char(20)
+            null: false
+            default: cd
+        - age:
+            type: int
+            default: 0
+        - sex:
+            type: char(1)
+            default: 'M'
+        - home:
+            type: char(50)
+        - score:
+            type: int
+            default: 0
+      keys:
+        primary: id
+        unique: 
+          - name
   - tb2:
-      - id:
-          type: int
-      - name2:
-          type: char(20)
-      - count:
-          type: int
+      rows:
+        - id:
+            type: int
+        - name2:
+            type: char(20)
+        - count:
+            type: int
+      keys:
+        foreign:
+          - 
+            col: id
+            ftable: tb1
+            fcol: id
+            delete: CASCADE
+            update: CASCADE
   - tb3:
-      - id: 
-          type: int
-          key: 'primary key'
-          auto_increment: true
-      - book:
-          type: char(30)
-      - bookname:
-          type: char(30)
-          default: 老子
+      rows:
+        - id: 
+            type: int
+            auto_increment: true
+        - book:
+            type: char(30)
+        - bookname:
+            type: char(30)
+            default: 老子
+      keys:
+        primary: id

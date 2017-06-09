@@ -57,9 +57,7 @@ function importData(srcFile, host, user, pass, db) {
     conn.end(() => { });
   }).catch(() => {
     logger.error("数据导入失败");
-    mysql.rollback(() => {
-      conn.end();
-    })
+    mysql.rollback(conn)
   })
 }
 
