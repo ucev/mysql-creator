@@ -150,7 +150,15 @@ function createDatabase(filename) {
     var promises = tables.map((tb) => {
       return createTable(conn, tb);
     });
-    return Promise.all(promises);
+    return Promise.all(promises).then((infos) => {
+      infos.forEach((info) => {
+        logger.succ(info);
+      })
+    }).catch((infos) => {
+      infos.forEach((info) => {
+        logger.error(info);
+      })
+    })
   }).then(() => {
     return mysql.commit(conn);
   }).then(() => {
@@ -168,16 +176,13 @@ function createNewTable(conn, tbname, tbstruct) {
   return new Promise((resolve, reject) => {
     var sql = buildCreateTableSql(conn, tbname, tbstruct);
     if (!sql) {
-      logger.error(`表${tbname} 配置错误`);
-      reject();
+      reject(`表${tbname} 配置错误`);
     }
     conn.query(sql, (err, results, fields) => {
       if (err) {
-        logger.error(`表 ${tbname} 创建失败`);
-        reject();
+        reject(`表 ${tbname} 创建失败`);
       }
-      logger.succ(`表 ${tbname} 创建成功`);
-      resolve();
+      resolve(`表 ${tbname} 创建成功`);
     })
   })
 }
@@ -222,11 +227,11 @@ function exportStruct(filepath, host, user, password, database) {
     return dumpDataToFile(filepath, struct);
   }).then(() => {
     logger.succ("数据库导出成功");
-    conn.end(() => { });
+    mysql.close(conn);
   }).catch((err) => {
     console.log(err);
     logger.error("数据库导出失败");
-    conn.end(() => { });
+    mysql.close(conn);
   });
 }
 
@@ -309,9 +314,9 @@ function refactTable(conn, tbname, tbstruct) {
     })
   })
   return Promise.all(ps).then(() => {
-    logger.succ(`表 ${tbname} 重构成功`);
+    return Promise.resolve(`表 ${tbname} 重构成功`);
   }, () => {
-    logger.error(`表 ${tbname} 重构失败`);
+    return Promise.reject(`表 ${tbname} 重构失败`);
   });
 }
 
@@ -392,5 +397,5 @@ function sameRow(newRow, oldRow) {
   return true;
 }
 
-exports.createDatabase = createDatabase;
+exports.importStruct = createDatabase;
 exports.exportStruct = exportStruct;

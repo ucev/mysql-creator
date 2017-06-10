@@ -38,25 +38,24 @@ function connectDatabase(conn, dbname) {
 }
 
 function createConnection(configs) {
-  var conn = mysql.createConnection(configs);
-  return conn;
+  return mysql.createConnection(configs);
 }
 
 function createDatabase(conn, dbname, charset, collate) {
-  if (charset && collate) {
-    var c = collate.split('_');
-    if (c[0] != charset) collate = undefined;
-  }
-  var sql = `create database if not exists ${conn.escapeId(dbname)}`;
-  if (charset) {
-    sql += ` character set ${charset}`;
-    if (collate) {
-      sql += ` collate ${collate}`;
-    }
-  } else {
-    sql += ` character set utf8mb4 collate utf8mb4_unicode_ci`;
-  }
   return new Promise((resolve, reject) => {
+    if (charset && collate) {
+      var c = collate.split('_');
+      if (c[0] != charset) collate = undefined;
+    }
+    var sql = `create database if not exists ${conn.escapeId(dbname)}`;
+    if (charset) {
+      sql += ` character set ${charset}`;
+      if (collate) {
+        sql += ` collate ${collate}`;
+      }
+    } else {
+      sql += ` character set utf8mb4 collate utf8mb4_unicode_ci`;
+    }
     conn.query(sql, (err, results, fields) => {
       if (err) {
         reject();
@@ -67,16 +66,16 @@ function createDatabase(conn, dbname, charset, collate) {
 }
 
 function getDatabaseData(conn) {
-  var datas = {};
   return listTables(conn).then((tables) => {
     var dpromises = tables.map((table) => {
-      return getTableData(conn, table).then((data) => {
-        datas[table] = data;
-      }).catch(() => {
-      });
+      return getTableData(conn, table);
     });
-    return Promise.all(dpromises).then(() => {
-      return Promise.resolve(datas);
+    return Promise.all(dpromises).then((datas) => {
+      var returnVal = {};
+      for (var i = 0; i < tables.length; i++) {
+        returnVal[tables[i]] = datas[i];
+      }
+      return Promise.resolve(returnVal);
     }).catch(() => {
       return Promise.reject();
     })
@@ -106,22 +105,23 @@ function getDatabaseCharset(conn, dbname) {
 }
 
 function getDatabaseStruct(conn, dbname) {
-  var tables = []
+  var returnVal = {};
   return listTables(conn).then((tbs) => {
     var tpromises = tbs.map((tname) => {
-      return getTableStruct(conn, tname, tables).then((struct) => {
-        tables.push({ [tname]: struct })
-      }).catch(() => {
-        console.log('error');
-      })
+      return getTableStruct(conn, tname);
     })
-    return Promise.all(tpromises).then(() => {
+    return Promise.all(tpromises).then((tstructs) => {
+      var tables = [];
+      for (var i = 0; i < tbs.length; i++) {
+        tables.push({ [tbs[i]]: tstructs[i] });
+      }
       return Promise.resolve(tables);
-    })
+    }).catch(() => { });
   }).then((structs) => {
+    returnVal.tables = structs;
     return getDatabaseCharset(conn, dbname)
   }).then((data) => {
-    return Promise.resolve(Object.assign({ tables: tables }, data));
+    return Promise.resolve(Object.assign(returnVal, data));
   }).catch(() => { })
 }
 

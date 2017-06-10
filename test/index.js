@@ -1,3 +1,3 @@
-const create = require('../src/mysql_creator');
+const create = require('../index.js');
 
-create('./db.yaml');
+create.importStruct(__dirname + '/db.yaml');
