@@ -38,7 +38,15 @@ function connectDatabase(conn, dbname) {
 }
 
 function createConnection(configs) {
-  return mysql.createConnection(configs);
+  return new Promise((resolve, reject) => {
+    var conn = mysql.createConnection(configs);
+    conn.connect((err) => {
+      if (err) {
+        reject('无法连接到数据库');
+      }
+      resolve(conn);
+    })
+  })
 }
 
 function createDatabase(conn, dbname, charset, collate) {

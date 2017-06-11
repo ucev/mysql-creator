@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-const createDatabase = require('../src/mysql_creator').importStruct;
-const exportStruct = require('../src/mysql_creator').exportStruct;
-const importData = require('../src/mysql_data').importData;
-const exportData = require('../src/mysql_data').exportData;
+const createDatabase = require('../src/mysql-creator').importStruct;
+const exportStruct = require('../src/mysql-creator').exportStruct;
+const importData = require('../src/mysql-data').importData;
+const exportData = require('../src/mysql-data').exportData;
 const logger = require('../src/utils/logger');
 const readline = require('readline');
 
