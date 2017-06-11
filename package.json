@@ -1,6 +1,6 @@
 {
   "name": "mysql-creator",
-  "version": "0.4.0",
+  "version": "0.3.1",
   "description": "mysql-creator",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "url": "git+https://github.com/ucev/mysql-creator.git"
   },
   "bin": {
-    "mysql-creator": "bin/mysql_creator.js"
+    "mysql-creator": "bin/mysql-creator.js"
   },
   "keywords": [
     "mysql",
