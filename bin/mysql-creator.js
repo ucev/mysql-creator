@@ -4,7 +4,7 @@ const exportStruct = require('../src/mysql-creator').exportStruct;
 const importData = require('../src/mysql-data').importData;
 const exportData = require('../src/mysql-data').exportData;
 const logger = require('../src/utils/logger');
-const readline = require('readline');
+const getpass = require('getpass');
 
 const options = [
   "d",
@@ -30,7 +30,6 @@ function destructOptions(args) {
             i++;
           }
         } else {
-          console.log(args[i + 1][1]);
           params[arg[1]] = arg.substr(2);
         }
       } else {
@@ -43,7 +42,6 @@ function destructOptions(args) {
       }
     }
   }
-  console.log(params);
   return params;
 }
 
@@ -62,13 +60,8 @@ if (argv.length <= 2) {
     process.exit(1);
   }
   if (!password) {
-    var rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    rl.question("请输入数据库密码", (answer) => {
-      password = answer;
-      rl.close();
+    getpass.getPass({ prompt: "请输入数据库密码" }, (err, pass) => {
+      password = pass;
       if (input) {
         importData(input, host, user, password, database);
       } else if (output) {
