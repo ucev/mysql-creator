@@ -120,61 +120,6 @@ function changeDatabaseCharset (conn, dbname, newCharset, newCollate, oldCharset
   })
 }
 
-function importStruct (filename) {
-  _dataStruct = yaml.safeLoad(fs.readFileSync(filename, 'utf8'))
-  _oldStruct = {}
-  var conn
-  var { host, user, pass, dbname, charset, collate, tables } = _dataStruct
-  try {
-    return mysql.createConnection({ host: host, user: user, password: pass, multipleStatements: true }).then((_conn) => {
-      conn = _conn
-      return mysql.beginTransaction(conn)
-    }).then(() => {
-      return mysql.createDatabase(conn, dbname, charset, collate)
-    }).then((dt) => {
-      return mysql.connectDatabase(conn, dbname)
-    }).then(() => {
-      return mysql.getDatabaseStruct(conn, dbname)
-    }).then((structs) => {
-      _oldStruct = structs.tables
-      return changeDatabaseCharset(conn, dbname, charset, collate, structs.charset, structs.collate).then(() => {
-        return Promise.resolve(structs.tables)
-      }).catch(() => { })
-    }).then(() => {
-      var promises = tables.map((tb) => {
-        return createTable(conn, tb)
-      })
-      return Promise.all(promises).then((infos) => {
-        infos.forEach((info) => {
-          logger.succ(info)
-        })
-      }).catch((infos) => {
-        logger.error(infos)
-      })
-    }).then(() => {
-      return mysql.commit(conn)
-    }).then(() => {
-      return mysql.close(conn)
-    }).catch((err) => {
-      logger.error(err.message)
-      if (conn) {
-        return mysql.fallback(conn).then(() => {
-          mysql.close(conn)
-        }).catch(() => { mysql.close(conn) })
-      }
-    })
-  } catch (e) {
-    console.log(e)
-    if (conn) {
-      mysql.fallback(conn).then(() => {
-        mysql.close(conn)
-      }).catch(() => {
-        mysql.close(conn)
-      })
-    }
-  }
-}
-
 // no foreign key or other indexes
 function createNewTable (conn, tbname, tbstruct) {
   return new Promise((resolve, reject) => {
@@ -215,38 +160,6 @@ function dropKeyField (conn, key, field) {
     default:
       field = conn.escapeId(field)
       return `drop index ${field}`
-  }
-}
-
-function exportStruct (filepath, host, user, password, database) {
-  var conn
-  try {
-    return mysql.createConnection({ host: host, user: user, password: password, database: database }).then((_conn) => {
-      conn = _conn
-      return mysql.getDatabaseStruct(conn, database)
-    }).then((struct) => {
-      struct = Object.assign({
-        host: '',
-        user: '',
-        pass: '',
-        dbname: database
-      }, struct)
-      return dumpDataToFile(filepath, struct)
-    }).then(() => {
-      logger.succ('数据库导出成功')
-      mysql.close(conn)
-    }).catch((err) => {
-      console.log(err)
-      logger.error('数据库导出失败')
-      mysql.close(conn)
-    })
-  } catch (e) {
-    console.log(e)
-    mysql.fallback(conn).then(() => {
-      mysql.close(conn)
-    }).catch(() => {
-      mysql.close(conn)
-    })
   }
 }
 
@@ -413,6 +326,68 @@ function sameRow (newRow, oldRow) {
     }
   }
   return true
+}
+
+async function exportStruct (filepath, host, user, password, database) {
+  var conn
+  try {
+    conn = await mysql.createConnection({ host: host, user: user, password: password, database: database })
+    var struct = await mysql.getDatabaseStruct(conn, database)
+    struct = Object.assign({
+      host: '',
+      user: '',
+      pass: '',
+      dbname: database
+    }, struct)
+    await dumpDataToFile(filepath, struct)
+    logger.succ('数据库导出成功')
+  } catch (err) {
+    logger.error('数据库导出失败')
+    console.log(err)
+  } finally {
+    if (conn) {
+      mysql.close(conn)
+    }
+  }
+}
+
+async function importStruct (filename) {
+  _dataStruct = yaml.safeLoad(fs.readFileSync(filename, 'utf8'))
+  var conn
+  var { host, user, pass, dbname, charset, collate, tables } = _dataStruct
+  try {
+    conn = await mysql.createConnection({ host: host, user: user, password: pass, multipleStatements: true })
+    await mysql.createDatabase(conn, dbname, charset, collate)
+    await mysql.connectDatabase(conn, dbname)
+    var structs = await mysql.getDatabaseStruct(conn, dbname)
+    _oldStruct = structs.tables
+    await changeDatabaseCharset(conn, dbname, charset, collate, structs.charset, structs.collate)
+    console.log(tables instanceof Array ? 'YES' : 'NO')
+    var promises = tables.map((tb) => {
+      return createTable(conn, tb)
+    })
+    await Promise.all(promises).then((infos) => {
+      infos.forEach((info) => {
+        logger.succ(info)
+      })
+    }).catch((err) => {
+      console.log(err)
+      logger.error(err.message)
+    })
+    await mysql.commit(conn)
+    await mysql.close(conn)
+  } catch (err) {
+    console.log(err)
+    if (conn) {
+      try {
+        await mysql.rollback(conn)
+      } catch (err) {
+        console.log(err)
+      } finally {
+        mysql.close(conn)
+      }
+    }
+  }
 }
 
 exports.importStruct = importStruct

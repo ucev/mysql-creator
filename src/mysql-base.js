@@ -130,7 +130,7 @@ function getDatabaseStruct (conn, dbname) {
     return getDatabaseCharset(conn, dbname)
   }).then((data) => {
     return Promise.resolve(Object.assign(returnVal, data))
-  }).catch(() => { })
+  })
 }
 
 function getForeignKeys (createTb) {
