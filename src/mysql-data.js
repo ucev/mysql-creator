@@ -36,7 +36,7 @@ async function exportData (destFile, host, user, pass, db) {
     console.log(err)
   } finally {
     if (conn) {
-      mysql.close(conn)
+      conn.end()
     }
   }
 }
@@ -46,22 +46,22 @@ async function importData (srcFile, host, user, pass, db) {
   var conn
   try {
     conn = await mysql.createConnection({ host: host, user: user, password: pass, database: db, charset: 'utf8mb4' })
-    await mysql.beginTransaction(conn)
+    await conn.beginTransaction()
     var tables = await mysql.listTables(conn)
     var tpromises = tables.map((tb) => {
       return importTableData(conn, tb, datas[tb])
     })
     await Promise.all(tpromises)
-    await mysql.commit(conn)
+    await conn.commit()
     logger.succ('数据导入成功')
   } catch (err) {
     logger.error(err.message)
     console.log(err)
     if (conn) {
-      await mysql.rollback(conn)
+      await conn.rollback()
     }
   } finally {
-    mysql.close(conn)
+    conn.end()
   }
 }
 

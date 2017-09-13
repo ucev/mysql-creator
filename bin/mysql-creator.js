@@ -21,7 +21,7 @@ const getpass = require('getpassword');
  *       u: user
  *   如果不加附加参数，则第三个参数代表导入数据库结构所在的文件
  *   具体用法见 {@link https://www.npmjs.com/package/minimist }
- * 
+ *
  */
 
 const options = [

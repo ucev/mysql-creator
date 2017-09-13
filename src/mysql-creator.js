@@ -100,7 +100,8 @@ function buildRowParts (conn, row) {
   if ('default' in descp) {
     parts.push(`default ${conn.escape(descp.default)}`)
   }
-  if (['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint'].indexOf(descp.type) !== -1 && descp.auto_increment === true) {
+  // if (['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint'].indexOf(descp.type) !== -1 && descp.auto_increment === true) {
+  if (descp.type.indexOf('int') !== -1 && descp.auto_increment === true) {
     parts.push('auto_increment')
   }
   return parts
@@ -110,14 +111,7 @@ function changeDatabaseCharset (conn, dbname, newCharset, newCollate, oldCharset
   if ((!newCharset || newCharset === oldCharset) && (!newCollate && newCollate === oldCollate)) {
     return Promise.resolve()
   }
-  return new Promise((resolve, reject) => {
-    conn.query(`alter database ${conn.escapeId(dbname)} character set ${conn.escapeId(newCharset)} collate ${conn.escapeId(newCollate)}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+  return conn.query(`alter database ${conn.escapeId(dbname)} character set ${conn.escapeId(newCharset)} collate ${conn.escapeId(newCollate)}`)
 }
 
 // no foreign key or other indexes
@@ -309,7 +303,13 @@ function refactTableRows (conn, tbname, tbstruct) {
 }
 
 function sameRow (newRow, oldRow) {
-  var sameValueArr = { 'int': ['int', 'int(11)'] }
+  var sameValueArr = {
+    tinyint: ['tinyint', 'tinyint(4)'],
+    smallint: ['smallint', 'smallint(6)'],
+    mediumint: ['mediumint', 'mediumint(9)'],
+    int: ['int', 'int(11)'],
+    bigint: ['bigint', 'bigint(20)']
+  }
   var newKeys = Object.keys(newRow)
   var oldKeys = Object.keys(oldRow)
   var keys = newKeys
@@ -320,7 +320,14 @@ function sameRow (newRow, oldRow) {
     }
   }
   for (k of keys) {
-    if (k === 'type' && sameValueArr['int'].includes(newRow[k]) && sameValueArr['int'].includes(oldRow[k])) continue
+    // int/int(11)...
+    if (k === 'type' && newRow[k].indexOf('int') !== -1) {
+      var ck = oldRow[k]
+      ck = ck.slice(0, ck.indexOf('('))
+      if (sameValueArr[ck] && sameValueArr[ck].includes(oldRow[k]) && sameValueArr[ck].includes(newRow[k])) {
+        continue
+      }
+    }
     if ((newRow[k] && oldRow[k]) && newRow[k] !== oldRow[k]) {
       return false
     }
@@ -342,27 +349,26 @@ async function exportStruct (filepath, host, user, password, database) {
     await dumpDataToFile(filepath, struct)
     logger.succ('数据库导出成功')
   } catch (err) {
-    logger.error('数据库导出失败')
     console.log(err)
+    logger.error('数据库导出失败')
   } finally {
     if (conn) {
-      mysql.close(conn)
+      conn.end()
     }
   }
 }
 
 async function importStruct (filename) {
-  _dataStruct = yaml.safeLoad(fs.readFileSync(filename, 'utf8'))
-  var conn
-  var { host, user, pass, dbname, charset, collate, tables } = _dataStruct
   try {
-    conn = await mysql.createConnection({ host: host, user: user, password: pass, multipleStatements: true })
+    _dataStruct = yaml.safeLoad(fs.readFileSync(filename, 'utf8'))
+    var { host, user, pass, dbname, charset, collate, tables } = _dataStruct
+    var conn = await mysql.createConnection({ host: host, user: user, password: pass, multipleStatements: true })
+    await conn.beginTransaction()
     await mysql.createDatabase(conn, dbname, charset, collate)
     await mysql.connectDatabase(conn, dbname)
     var structs = await mysql.getDatabaseStruct(conn, dbname)
     _oldStruct = structs.tables
     await changeDatabaseCharset(conn, dbname, charset, collate, structs.charset, structs.collate)
-    console.log(tables instanceof Array ? 'YES' : 'NO')
     var promises = tables.map((tb) => {
       return createTable(conn, tb)
     })
@@ -374,18 +380,19 @@ async function importStruct (filename) {
       console.log(err)
       logger.error(err.message)
     })
-    await mysql.commit(conn)
-    await mysql.close(conn)
+    await conn.commit()
   } catch (err) {
     console.log(err)
     if (conn) {
       try {
-        await mysql.rollback(conn)
+        await conn.rollback()
       } catch (err) {
         console.log(err)
-      } finally {
-        mysql.close(conn)
       }
+    }
+  } finally {
+    if (conn) {
+      conn.end()
     }
   }
 }

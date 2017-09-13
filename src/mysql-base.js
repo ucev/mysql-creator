@@ -1,56 +1,16 @@
-const mysql = require('mysql')
-
-function beginTransaction (conn) {
-  return new Promise((resolve, reject) => {
-    conn.beginTransaction((err) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
-}
-
-function close (conn) {
-  conn.end(() => { })
-}
-
-function commit (conn) {
-  return new Promise((resolve, reject) => {
-    conn.commit((err) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
-}
+const mysql = require('promise-mysql')
 
 function connectDatabase (conn, dbname) {
-  return new Promise((resolve, reject) => {
-    conn.query(`use ${dbname}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+  return conn.query(`use ${dbname}`)
 }
 
-function createConnection (configs) {
-  return new Promise((resolve, reject) => {
-    var conn = mysql.createConnection(configs)
-    conn.connect((err) => {
-      if (err) {
-        reject(new Error('无法连接到数据库'))
-      }
-      resolve(conn)
-    })
-  })
+async function createConnection (configs) {
+  var conn = await mysql.createConnection(configs)
+  return conn
 }
 
-function createDatabase (conn, dbname, charset, collate) {
-  return new Promise((resolve, reject) => {
+async function createDatabase (conn, dbname, charset, collate) {
+  try {
     if (charset && collate) {
       var c = collate.split('_')
       if (c[0] !== charset) collate = undefined
@@ -64,73 +24,68 @@ function createDatabase (conn, dbname, charset, collate) {
     } else {
       sql += ` character set utf8mb4 collate utf8mb4_unicode_ci`
     }
-    conn.query(sql, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+    await conn.query(sql)
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
-function getDatabaseData (conn) {
-  return listTables(conn).then((tables) => {
+async function getDatabaseData (conn) {
+  try {
+    var tables = await listTables(conn)
     var dpromises = tables.map((table) => {
       return getTableData(conn, table)
     })
-    return Promise.all(dpromises).then((datas) => {
-      var returnVal = {}
-      for (var i = 0; i < tables.length; i++) {
-        returnVal[tables[i]] = datas[i]
-      }
-      return Promise.resolve(returnVal)
-    }).catch(() => {
-      return Promise.reject(new Error('获取数据失败'))
-    })
-  })
+    var datas = await Promise.all(dpromises)
+    var returnVal = {}
+    for (var i = 0; i < tables.length; i++) {
+      returnVal[tables[i]] = datas[i]
+    }
+    return Promise.resolve(returnVal)
+  } catch (err) {
+    return Promise.reject(new Error('获取数据失败'))
+  }
 }
 
-function getDatabaseCharset (conn, dbname) {
-  return new Promise((resolve, reject) => {
-    conn.query(`show create database ${conn.escapeId(dbname)}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      var createDb = results[0]['Create Database']
-      var reg = /CHARACTER SET\s(\w+)\sCOLLATE\s(\w+)/
-      var res = reg.exec(createDb)
-      if (res) {
-        resolve({ charset: res[1], collate: res[2] })
-      }
-      reg = /CHARACTER SET\s+(\w+)/
-      res = reg.exec(createDb)
-      if (res) {
-        resolve({ charset: res[1] })
-      }
-      resolve({})
-    })
-  })
+async function getDatabaseCharset (conn, dbname) {
+  try {
+    var results = await conn.query(`show create database ${conn.escapeId(dbname)}`)
+    var createDb = results[0]['Create Database']
+    var reg = /CHARACTER SET\s(\w+)\sCOLLATE\s(\w+)/
+    var res = reg.exec(createDb)
+    if (res) {
+      return Promise.resolve({ charset: res[1], collate: res[2] })
+    }
+    reg = /CHARACTER SET\s+(\w+)/
+    res = reg.exec(createDb)
+    if (res) {
+      return Promise.resolve({ charset: res[1] })
+    }
+    return Promise.resolve({})
+  } catch (err) {
+    return Promise.reject(new Error('获取字符集失败'))
+  }
 }
 
-function getDatabaseStruct (conn, dbname) {
-  var returnVal = {}
-  return listTables(conn).then((tbs) => {
-    var tpromises = tbs.map((tname) => {
+async function getDatabaseStruct (conn, dbname) {
+  try {
+    var returnVal = {}
+    var tableNames = await listTables(conn)
+    var tpromises = tableNames.map((tname) => {
       return getTableStruct(conn, tname)
     })
-    return Promise.all(tpromises).then((tstructs) => {
-      var tables = []
-      for (var i = 0; i < tbs.length; i++) {
-        tables.push({ [tbs[i]]: tstructs[i] })
-      }
-      return Promise.resolve(tables)
-    }).catch(() => { })
-  }).then((structs) => {
-    returnVal.tables = structs
-    return getDatabaseCharset(conn, dbname)
-  }).then((data) => {
-    return Promise.resolve(Object.assign(returnVal, data))
-  })
+    var tstructs = await Promise.all(tpromises)
+    var tables = []
+    for (var i = 0; i < tableNames.length; i++) {
+      tables.push({ [tableNames[i]]: tstructs[i] })
+    }
+    returnVal.tables = tables
+    var charsets = await getDatabaseCharset(conn, dbname)
+    Object.assign(returnVal, charsets)
+    return Promise.resolve(returnVal)
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
 function getForeignKeys (createTb) {
@@ -139,13 +94,18 @@ function getForeignKeys (createTb) {
   if (!matches) return []
   var res = matches.map((mat) => {
     var r = reg.exec(mat)
-    return {
+    var k = {
       col: r[1],
       ftable: r[2],
       fcol: r[3],
       delete: r[4],
       update: r[5]
     }
+    for (var i in k) {
+      if (k[i].startsWith('`')) k[i] = k[i].slice(1)
+      if (k[i].endsWith('`')) k[i] = k[i].slice(0, k[i].length - 1)
+    }
+    return k
   })
   return res
 }
@@ -196,83 +156,47 @@ function getTableCharset (createTb) {
   return {}
 }
 
-function getTableData (conn, tablename) {
-  return new Promise((resolve, reject) => {
-    conn.query(`select * from ${tablename}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      resolve(Array.from(results))
-    })
-  })
+async function getTableData (conn, tablename) {
+  try {
+    var results = await conn.query(`select * from ${tablename}`)
+    return Promise.resolve(Array.from(results))
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
-function getTableStruct (conn, tablename) {
-  return new Promise((resolve, reject) => {
-    conn.query(`describe ${tablename}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      var struct = _getTableStruct(results)
-      resolve(struct)
-    })
-  }).then((struct) => {
-    return new Promise((resolve, reject) => {
-      conn.query(`show create table ${tablename}`, (err, results, fields) => {
-        if (err) {
-          reject(err)
-        }
-        var createTb = results[0]['Create Table']
-        var chars = getTableCharset(createTb)
-        Object.assign(struct, chars)
-        var fkeys = getForeignKeys(createTb)
-        if (fkeys) {
-          struct.keys.foreign = fkeys
-        }
-        resolve(struct)
-      })
-    })
-  }).catch(() => { })
+async function getTableStruct (conn, tablename) {
+  try {
+    var results = await conn.query(`describe ${tablename}`)
+    var struct = _getTableStruct(results)
+    results = await conn.query(`show create table ${tablename}`)
+    var createTb = results[0]['Create Table']
+    var chars = getTableCharset(createTb)
+    Object.assign(struct, chars)
+    var fkeys = getForeignKeys(createTb)
+    if (fkeys) {
+      struct.keys.foreign = fkeys
+    }
+    return Promise.resolve(struct)
+  } catch (err) {
+    return Promise.reject(new Error(`获取表格 ${tablename} 结构失败`))
+  }
 }
 
-function listTables (conn) {
-  return new Promise((resolve, reject) => {
-    conn.query('show tables', (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      if (results.length === 0) {
-        resolve([])
-      }
-      var fname = fields[0].name
-      var tables = results.map(r => r[fname])
-      resolve(tables)
-    })
-  })
-}
-
-function rollback (conn) {
-  return new Promise((resolve, reject) => {
-    conn.rollback(() => {
-      resolve()
-    })
-  })
+async function listTables (conn) {
+  try {
+    var results = await conn.query('show tables')
+    var tables = Array.from(results).map(r => r[Object.keys(r)[0]])
+    return Promise.resolve(tables)
+  } catch (err) {
+    return Promise.reject(new Error('获取表格列表失败'))
+  }
 }
 
 function truncate (conn, table) {
-  return new Promise((resolve, reject) => {
-    conn.query(`truncate ${table}`, (err, results, fields) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+  return conn.query(`truncate ${table}`)
 }
 
-exports.beginTransaction = beginTransaction
-exports.close = close
-exports.commit = commit
 exports.connectDatabase = connectDatabase
 exports.createConnection = createConnection
 exports.createDatabase = createDatabase
@@ -281,5 +205,4 @@ exports.getDatabaseStruct = getDatabaseStruct
 exports.getTableData = getTableData
 exports.getTableStruct = getTableStruct
 exports.listTables = listTables
-exports.rollback = rollback
 exports.truncate = truncate
