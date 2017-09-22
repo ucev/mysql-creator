@@ -48,7 +48,7 @@ if (argv.length <= 2) {
     process.exit(1);
   }
   if (password === true) {
-    getpass.getpass({ prompt: "请输入数据库密码" }, (err, pass) => {
+    getpass.getpass({ prompt: "请输入数据库密码：" }, (err, pass) => {
       password = pass;
       if (input) {
         importData(input, host, user, password, database);
