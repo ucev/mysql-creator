@@ -5,23 +5,19 @@ const logger = require('./utils/logger')
 
 const dumpDataToFile = require('./utils/base').dumpDataToFile
 
-function importTableData (conn, tbname, data) {
+async function importTableData (conn, tbname, data) {
   if (!data || data.length === 0) {
     return Promise.resolve()
   }
-  return mysql.truncate(conn, tbname).then(() => {
+  try {
+    await mysql.truncate(conn, tbname)
     var tpromises = data.map((d) => {
-      return new Promise((resolve, reject) => {
-        conn.query(`insert into ${tbname} set ?`, d, (err, results, fields) => {
-          if (err) {
-            reject(err)
-          }
-          resolve()
-        })
-      })
+      return conn.query(`insert into ${tbname} set ?`, d)
     })
     return Promise.all(tpromises)
-  })
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
 async function exportData (destFile, host, user, pass, db) {

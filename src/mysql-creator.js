@@ -226,16 +226,7 @@ function refactKeys (conn, key, newKeys, oldKeys) {
 function refactTable (conn, tbname, tbstruct) {
   var rows = refactTableRows(conn, tbname, tbstruct)
   var ps = rows.map((row) => {
-    return new Promise((resolve, reject) => {
-      conn.query(row, (err, results, fields) => {
-        if (err) {
-          reject(err)
-        }
-        resolve()
-      })
-    }).catch((e) => {
-      console.log(e)
-    })
+    return conn.query(row)
   })
   return Promise.all(ps).then(() => {
     return Promise.resolve(`表 ${tbname} 重构成功`)
