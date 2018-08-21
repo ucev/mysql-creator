@@ -40,12 +40,12 @@
     "eslint-plugin-standard": "^3.0.1"
   },
   "dependencies": {
+    "babel-eslint": "^8.0.0",
     "chalk": "^2.1.0",
-    "getpassword": "0.0.6",
+    "getpassword": "^0.1.0",
     "js-yaml": "^3.10.0",
     "minimist": "^1.2.0",
     "promise-mysql": "^3.0.2",
-    "readable-stream": "^2.3.3",
-    "babel-eslint": "^8.0.0"
+    "readable-stream": "^2.3.3"
   }
 }
